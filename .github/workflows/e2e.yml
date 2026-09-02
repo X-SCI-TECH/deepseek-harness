@@ -6,9 +6,9 @@ name: E2E (real DeepSeek API)
 # (DEEPSEEK_BASE_URL is pinned to it explicitly so a stray repo-root .env
 # can't redirect the run).
 #
-# Triggered only on push to main/master. No pull_request / schedule /
-# workflow_dispatch triggers: this E2E run burns real API tokens on every
-# invocation, so it should only fire on post-merge code.
+# Triggered on push to main/master. The PR / schedule / manual triggers are
+# commented out (kept for later re-enable, see `on:` below) — this E2E run
+# burns real API tokens on every invocation, so re-enable them consciously.
 #
 # SECURITY: this workflow only ever runs in the receiving repo's context with
 # the secret available. NEVER add `pull_request_target` (or any secret-bearing
@@ -16,6 +16,20 @@ name: E2E (real DeepSeek API)
 on:
   push:
     branches: [main, master]
+  # Disabled triggers — commented out rather than deleted, so they can be
+  # re-enabled by uncommenting. Remember: each one burns real API tokens.
+  # workflow_dispatch:
+  # pull_request:
+  # schedule:
+  #   # 00:17 UTC nightly = 08:17 Asia/Shanghai — off the top-of-hour cron stampede.
+  #   - cron: '17 0 * * *'
+
+# Cancel a superseded PR run (it is on a stale commit); never cancel a
+# push run. Commented out together with the PR trigger above — uncomment
+# alongside it if PR runs are ever re-enabled.
+# concurrency:
+#   group: ${{ github.workflow }}-${{ github.ref }}
+#   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 # Least privilege: this job only reads the repo to run tests.
 permissions:
@@ -30,6 +44,12 @@ jobs:
   e2e:
     runs-on: ubuntu-latest
     name: e2e
+    # Guard for untrusted PRs (forks + Dependabot), where the secret is
+    # withheld — they would otherwise hard-fail the preflight. Commented out
+    # together with the pull_request trigger in `on:`.
+    # if: >-
+    #   github.event_name != 'pull_request'
+    #   || !(github.event.pull_request.head.repo.fork || github.event.pull_request.user.login == 'dependabot[bot]')
     # Profile e2e files can each own several complete dsh subprocess trees, so
     # four file workers preserve process/PTY headroom. Tests retain 120s/test
     # and retry 2; 45m still bounds retry storms against a slow API.
